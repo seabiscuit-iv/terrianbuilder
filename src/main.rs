@@ -1,18 +1,20 @@
 
-use std::{default, ops::RangeInclusive, sync::{Arc, Mutex}};
+use std::{default, ops::RangeInclusive, ptr::null, sync::{Arc, Mutex}};
 
+use drawing::Drawing;
 use mesh::Mesh;
 use tobj;
 
 use camera::Camera;
 use eframe::{egui, egui_glow, glow::{self, HasContext, RIGHT}};
-use egui::{mutex, Margin, Style};
+use egui::{load::SizedTexture, vec2, Color32, ColorImage, Image, Margin, Rect, Style, TextureHandle, TextureOptions};
 use nalgebra::{Vector2, Vector3};
 
-mod Shader;
-use Shader::ShaderProgram;
+mod shader;
+use shader::ShaderProgram;
 
 mod mesh;
+mod drawing;
 
 
 mod camera;
@@ -20,14 +22,14 @@ mod camera;
 
 fn main() -> eframe::Result{
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_inner_size([420.0, 600.0]).with_position([100.0, 100.0]),
+        viewport: egui::ViewportBuilder::default().with_inner_size([530.0, 700.0]).with_position([100.0, 60.0]),
         multisampling: 4,
         renderer: eframe::Renderer::Glow,
         depth_buffer: 16,
         ..Default::default()
     };
     eframe::run_native(
-        "MeshView",
+        "TerrainBuilder",
         options,
         Box::new(|cc| Ok(Box::new(App::new(cc)))),
     )
@@ -37,6 +39,7 @@ fn main() -> eframe::Result{
 // Main App UI
 
 struct App {
+    drawing: Drawing,
     mesh: Arc<Mutex<Mesh>>,
     camera: Arc<Mutex<Camera>>,
     shader_program: Arc<Mutex<ShaderProgram>>,
@@ -55,53 +58,16 @@ impl eframe::App for App {
                 ..egui::Frame::default()
             })
             .show(ctx, |ui| {
-                if ui.button("Open File").clicked() {
-                    if let Some(path) = rfd::FileDialog::new().pick_file() {
-                        let mut load_options = tobj::LoadOptions::default();
-                        load_options.triangulate = true;
-                        load_options.ignore_lines = true;
-                        load_options.ignore_points = true;
-                        load_options.single_index = true;
 
-                        let mesh_obj = tobj::load_obj(path, &load_options);
-                        assert!(mesh_obj.is_ok());
-                
-                        let (mesh_objs, _) = mesh_obj.expect("FAILED TO LOAD OBJ");
-                        let mesh_obj = mesh_objs[0].clone();
-                
-                        let positions = mesh_obj.mesh.positions.chunks_exact(3).into_iter().map(|chunk| {
-                            Vector3::new(chunk[0], chunk[1], chunk[2])
-                        }).collect::<Vec<Vector3<f32>>>();
-                
-                        let indicies = mesh_obj.mesh.indices.chunks_exact(3).map(|c| {
-                            [c[0], c[1], c[2]]
-                        }).flatten().collect::<Vec<u32>>();
-
-                        let texcoords = mesh_obj.mesh.texcoords.chunks_exact(2).map(|x| {
-                            Vector2::new(x[0], x[1])
-                        }).collect::<Vec<Vector2<f32>>>();
-                
-                        let uvs = mesh_obj.mesh.texcoord_indices.iter().map(|x| {
-                            texcoords[*x as usize]
-                        }).collect::<Vec<Vector2<f32>>>();
-                
-                        let mesh = Mesh::new(&_frame.gl().unwrap(), 
-                            indicies.iter().map(|i| {positions[*i as usize]}).collect::<Vec<Vector3<f32>>>(), 
-                            (0..indicies.len()).map(|x| {x as u32}).collect(),
-                            texcoords,
-                            false
-                        );
-
-                        *self.mesh.lock().unwrap() = mesh;
-                        println!("New Mesh with {} verts", self.mesh.lock().unwrap().positions.len());
-                    }
-                }
             });
+
+        let mut img_rect : Rect = Rect::NOTHING;
 
         egui::CentralPanel::default().show(ctx, |ui| {
             egui::Frame::canvas(ui.style()).show(ui, |ui| {
                 // self.custom_painting(ui);
                 
+                img_rect = self.drawing.draw(ui, ctx).rect;
             });
             ui.label(format!("Verts: {}", self.mesh.lock().unwrap().positions.len()));
             ui.label(format!("Tris: {}", self.mesh.lock().unwrap().indicies.len()/3));
@@ -182,6 +148,11 @@ impl eframe::App for App {
     
         }
 
+
+        //DRAWING LOGIC
+        self.drawing.draw_update(ctx, img_rect);
+
+
         let look = rot * Vector3::new(0.0, 0.0, -1.0);
         let right = rot * Vector3::new(1.0, 0.0, 0.0);
         self.camera.lock().unwrap().right = right;
@@ -211,6 +182,7 @@ impl App {
         let camera = Camera::default();
         
         Self { 
+            drawing: Drawing::new(),
             mesh: Arc::new(Mutex::new(mesh)), 
             shader_program: Arc::new(Mutex::new(shader_program)),
             camera: Arc::new(Mutex::new(camera)),
