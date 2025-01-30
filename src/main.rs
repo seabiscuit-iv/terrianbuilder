@@ -2,12 +2,12 @@
 use std::{default, ops::RangeInclusive, ptr::null, sync::{Arc, Mutex}};
 
 use drawing::Drawing;
-use mesh::Mesh;
+use mesh::{generate_tiled_plane, Mesh};
 use tobj;
 
 use camera::Camera;
 use eframe::{egui, egui_glow, glow::{self, HasContext, RIGHT}};
-use egui::{load::SizedTexture, vec2, Color32, ColorImage, Image, Margin, Rect, Style, TextureHandle, TextureOptions};
+use egui::{load::SizedTexture, vec2, Align, Color32, ColorImage, Frame, Image, Layout, Margin, Rect, Style, TextureHandle, TextureOptions, ViewportBuilder};
 use nalgebra::{Vector2, Vector3};
 
 mod shader;
@@ -22,7 +22,7 @@ mod camera;
 
 fn main() -> eframe::Result{
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_inner_size([530.0, 700.0]).with_position([100.0, 60.0]),
+        viewport: egui::ViewportBuilder::default().with_inner_size([1060.0, 700.0]).with_position([100.0, 60.0]),
         multisampling: 4,
         renderer: eframe::Renderer::Glow,
         depth_buffer: 16,
@@ -64,11 +64,42 @@ impl eframe::App for App {
         let mut img_rect : Rect = Rect::NOTHING;
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            egui::Frame::canvas(ui.style()).show(ui, |ui| {
-                // self.custom_painting(ui);
+            let mut rect = ui.max_rect();
+            rect.set_height(rect.height());
+            ui.allocate_new_ui(egui::UiBuilder::new().max_rect(rect).layout(Layout::left_to_right(Align::Center)), |ui| {
+                let w = ui.available_width()/2.0;
+                let mut h : f32 = -1.0;
                 
-                img_rect = self.drawing.draw(ui, ctx).rect;
+                egui::Frame::none().show(ui, |ui| {
+                    ui.set_max_width(w);
+                    
+                    let mut rect = ui.max_rect();
+                    rect.set_height(rect.height()/2.0);
+
+                    
+                    h = ui.allocate_new_ui(egui::UiBuilder::new().max_rect(rect), |ui| {
+                        img_rect = self.drawing.draw(ui, ctx).rect;
+                    }).response.rect.height();
+                });
+                egui::Frame::canvas(ui.style()).show(ui, |ui| {
+                    let mut rect = ui.max_rect();
+                    rect.set_height(h);
+
+                    ui.allocate_new_ui(egui::UiBuilder::new().max_rect(rect), |ui| { 
+                        self.custom_painting(ui);
+                    });
+                });
             });
+
+            // ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+            //     egui::Frame::canvas(ui.style()).show(ui, |ui| {
+            //         self.custom_painting(ui);
+            //     });
+            //     // egui::Frame::canvas(ui.style()).show(ui, |ui| {
+            //         // img_rect = self.drawing.draw(ui, ctx).rect;
+            //     // });
+            // }); 
+            
             ui.label(format!("Verts: {}", self.mesh.lock().unwrap().positions.len()));
             ui.label(format!("Tris: {}", self.mesh.lock().unwrap().indicies.len()/3));
 
@@ -170,12 +201,7 @@ impl App {
             .as_ref()
             .expect("You need to run eframe with the glow backend");
 
-        let mesh = Mesh::new(&gl, 
-            [].to_vec(), 
-        [0].to_vec(),
-            [].to_vec(),
-            false
-        );
+        let mesh = generate_tiled_plane(gl, 20.0, 20.0, 200, 200);
 
         let shader_program = ShaderProgram::new(gl, "src/main.vert.glsl", "src/main.frag.glsl");
         
@@ -187,17 +213,18 @@ impl App {
             shader_program: Arc::new(Mutex::new(shader_program)),
             camera: Arc::new(Mutex::new(camera)),
             value: 0.0,
-            angle: (0.0, 0.0, 0.0),
+            angle: (-20.0, 0.0, 0.0),
             speed: 10.0
         }
     }
 
     fn custom_painting(&mut self, ui : &mut egui::Ui) {
+        let (w, h) = (ui.available_width(), ui.available_height() - 5.0);
+
         let (rect, response) =
-            ui.allocate_exact_size(egui::vec2(ui.available_width(), ui.available_height()/2.0) , egui::Sense::drag());
+            ui.allocate_exact_size(egui::vec2(w, h) , egui::Sense::drag());
 
-        self.camera.lock().unwrap().aspect_ratio = ui.available_width() / ui.available_height();
-
+        self.camera.lock().unwrap().aspect_ratio = w / h;
 
         let shader_program = self.shader_program.clone();
         let mesh = self.mesh.clone();

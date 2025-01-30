@@ -1,4 +1,4 @@
-use eframe::glow::{self, HasContext as _};
+use eframe::glow::{self, Context, HasContext as _};
 use nalgebra::{Vector2, Vector3, Vector4};
 
 
@@ -138,4 +138,52 @@ impl Mesh {
 }
 
 
-// }
+
+
+pub fn generate_tiled_plane(gl: &Context, width: f32, height: f32, tiles_x: usize, tiles_y: usize) -> Mesh {
+    let tile_width = width / tiles_x as f32;
+    let tile_height = height / tiles_y as f32;
+
+    let mut positions: Vec<Vector3<f32>> = Vec::new();
+    let mut uvs: Vec<Vector2<f32>> = Vec::new();
+    let mut indices: Vec<u32> = Vec::new();
+
+    for y in 0..tiles_y {
+        for x in 0..tiles_x {
+            // Compute the position offsets for each tile
+            let offset_x = x as f32 * tile_width - width / 2.0;
+            let offset_y = y as f32 * tile_height - height / 2.0;
+
+            // Define the positions for the corners of the current tile
+            let base_idx = (y * tiles_x + x) * 4;
+            positions.push([offset_x, 0.0, offset_y].into());                 // Bottom-left
+            positions.push([offset_x + tile_width, 0.0, offset_y].into());    // Bottom-right
+            positions.push([offset_x + tile_width, 0.0, offset_y + tile_height].into()); // Top-right
+            positions.push([offset_x, 0.0, offset_y + tile_height].into());   // Top-left
+
+            // Define the UV coordinates for the current tile
+            let uv_offset_x = x as f32 / tiles_x as f32;
+            let uv_offset_y = y as f32 / tiles_y as f32;
+            uvs.push([uv_offset_x, uv_offset_y].into());                      // Bottom-left
+            uvs.push([uv_offset_x + 1.0 / tiles_x as f32, uv_offset_y].into()); // Bottom-right
+            uvs.push([uv_offset_x + 1.0 / tiles_x as f32, uv_offset_y + 1.0 / tiles_y as f32].into()); // Top-right
+            uvs.push([uv_offset_x, uv_offset_y + 1.0 / tiles_y as f32].into()); // Top-left
+
+            // Define the indices for the two triangles forming the tile
+            indices.push(base_idx as u32);
+            indices.push((base_idx + 1) as u32);
+            indices.push((base_idx + 2) as u32);
+            indices.push((base_idx) as u32);
+            indices.push((base_idx + 2) as u32);
+            indices.push((base_idx + 3) as u32);
+        }
+    }
+
+    // Create the mesh
+    Mesh::new(&gl,
+        positions,
+        indices,
+        uvs,
+        false
+    )
+}
