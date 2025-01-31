@@ -202,6 +202,7 @@ pub fn generate_tiled_plane(gl: &Context, width: f32, height: f32, tiles_x: usiz
 
 
 
+            // let height  = img.pixels[y * (tiles_x+1) + x].to_array().iter().map(|x| *x as f32).sum::<f32>() * ((3.0 / 255.0) / 4.0);
 
 
 pub fn generate_tiled_plane_colorimg(gl: &Context, width: f32, height: f32, tiles_x: usize, tiles_y: usize, img: ColorImage) -> Mesh {

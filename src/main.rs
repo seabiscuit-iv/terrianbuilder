@@ -45,7 +45,8 @@ struct App {
     shader_program: Arc<Mutex<ShaderProgram>>,
     value: f32,
     angle: (f32, f32, f32),
-    speed: f32
+    speed: f32,
+    plane_density: u32
 }
 
 impl eframe::App for App {
@@ -100,12 +101,21 @@ impl eframe::App for App {
                         ui.label(format!("Verts: {}", self.mesh.lock().unwrap().positions.len()));
                         ui.add_space(0.0);
                         ui.label(format!("Tris: {}", self.mesh.lock().unwrap().indicies.len()/3));
+
+                        ui.add_space(4.0);
+
+                        ui.label("Plane Density");
+                        ui.add(egui::Slider::new(&mut self.plane_density, RangeInclusive::new(5, 511)));
+                        
                         ui.add_space(12.0);
                         if ui.button("Compile").clicked() {
                             let wireframe = self.mesh.lock().unwrap().wireframe;
-                            let mut mesh = generate_tiled_plane_colorimg(_frame.gl().unwrap(), 20.0, 20.0, 80, 80, bicubic_downsize( self.drawing.get_image(), 81));
+                            // self.mesh.lock().unwrap().destroy(_frame.gl().unwrap());
+                            let mut mesh = generate_tiled_plane_colorimg(_frame.gl().unwrap(), 20.0, 20.0, self.plane_density as usize, self.plane_density as usize, bicubic_downsize( self.drawing.get_image(), self.plane_density as usize + 1 ));
+                            // let mut mesh = generate_tiled_plane_colorimg(_frame.gl().unwrap(), 20.0, 20.0, self.plane_density as usize, self.plane_density as usize, bicubic_downsize( self.drawing.get_image(), self.plane_density as usize + 1 ));
                             mesh.wireframe = wireframe;
                             self.mesh = Arc::new(Mutex::new(mesh));
+                            self.mesh.lock().unwrap().load_buffers(_frame.gl().unwrap());
                         };
                         ui.add_space(12.0);
                         ui.collapsing("Viewport", |ui| {
@@ -113,7 +123,7 @@ impl eframe::App for App {
                                 self.mesh.lock().unwrap().load_buffers(&_frame.gl().unwrap());
                             }
                         });
-
+                        ui.add_space(4.0);
                         ui.collapsing("Camera Controls", |ui| {
                             ui.label("Position");
                             ui.horizontal(|ui| {
@@ -214,7 +224,7 @@ impl App {
             .as_ref()
             .expect("You need to run eframe with the glow backend");
 
-        let mesh = generate_tiled_plane(gl, 20.0, 20.0, 255, 255);
+        let mesh = generate_tiled_plane(gl, 20.0, 20.0, 100, 100);
 
         let shader_program = ShaderProgram::new(gl, "src/main.vert.glsl", "src/main.frag.glsl");
         
@@ -227,7 +237,8 @@ impl App {
             camera: Arc::new(Mutex::new(camera)),
             value: 0.0,
             angle: (-20.0, 0.0, 0.0),
-            speed: 10.0
+            speed: 10.0,
+            plane_density: 100
         }
     }
 
