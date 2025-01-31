@@ -1,7 +1,7 @@
 
 use std::{default, ops::RangeInclusive, ptr::null, sync::{Arc, Mutex}};
 
-use drawing::Drawing;
+use drawing::{bicubic_downsize, Drawing};
 use mesh::{generate_tiled_plane, generate_tiled_plane_colorimg, Mesh};
 use tobj;
 
@@ -102,7 +102,10 @@ impl eframe::App for App {
                         ui.label(format!("Tris: {}", self.mesh.lock().unwrap().indicies.len()/3));
                         ui.add_space(12.0);
                         if ui.button("Compile").clicked() {
-                            self.mesh = Arc::new(Mutex::new(generate_tiled_plane_colorimg(_frame.gl().unwrap(), 20.0, 20.0, 511, 511, self.drawing.get_image())))
+                            let wireframe = self.mesh.lock().unwrap().wireframe;
+                            let mut mesh = generate_tiled_plane_colorimg(_frame.gl().unwrap(), 20.0, 20.0, 80, 80, bicubic_downsize( self.drawing.get_image(), 81));
+                            mesh.wireframe = wireframe;
+                            self.mesh = Arc::new(Mutex::new(mesh));
                         };
                         ui.add_space(12.0);
                         ui.collapsing("Viewport", |ui| {
@@ -110,7 +113,6 @@ impl eframe::App for App {
                                 self.mesh.lock().unwrap().load_buffers(&_frame.gl().unwrap());
                             }
                         });
-                        ui.add_space(12.0);
 
                         ui.collapsing("Camera Controls", |ui| {
                             ui.label("Position");
@@ -212,7 +214,7 @@ impl App {
             .as_ref()
             .expect("You need to run eframe with the glow backend");
 
-        let mesh = generate_tiled_plane(gl, 20.0, 20.0, 511, 511);
+        let mesh = generate_tiled_plane(gl, 20.0, 20.0, 255, 255);
 
         let shader_program = ShaderProgram::new(gl, "src/main.vert.glsl", "src/main.frag.glsl");
         

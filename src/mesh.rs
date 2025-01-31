@@ -217,7 +217,7 @@ pub fn generate_tiled_plane_colorimg(gl: &Context, width: f32, height: f32, tile
             let offset_x = x as f32 * tile_width - width / 2.0;
             let offset_y = y as f32 * tile_height - height / 2.0;
 
-            let height  = img.pixels[y * 512 + x].to_array().iter().map(|x| *x as f32).sum::<f32>() * ((3.0 / 255.0) / 4.0);
+            let height  = img.pixels[y * (tiles_x+1) + x].to_array().iter().map(|x| *x as f32).sum::<f32>() * ((3.0 / 255.0) / 4.0);
 
             positions.push(Vector3::new(offset_x, height, offset_y));
             uvs.push(Vector2::new(x as f32 / tiles_x as f32, y as f32 / tiles_y as f32));
@@ -257,5 +257,4 @@ pub fn generate_tiled_plane_colorimg(gl: &Context, width: f32, height: f32, tile
         false
     )
 }
-
 
