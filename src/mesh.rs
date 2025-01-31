@@ -1,5 +1,5 @@
 use eframe::glow::{self, Context, HasContext as _};
-use egui::ColorImage;
+use egui::{ColorImage, Vec2};
 use nalgebra::{Vector2, Vector3, Vector4};
 
 
@@ -36,19 +36,21 @@ impl Mesh {
 
                 let rand = rand::random::<f32>().fract();
 
-                if i as i32 % 3 == 0 {
-                    let col = Vector3::new(
-                        rand::random::<f32>().fract(),
-                        rand::random::<f32>().fract(),
-                        rand::random::<f32>().fract()
-                        // 0.5, 0.5, 0.5
-                        // rand, rand, rand
-                    );
-                    let col = col.push(1.0);
-                    colors.push(col);
-                } else {
-                    colors.push(colors[i as usize - 1]);
-                }
+                // if i as i32 % 3 == 0 {
+                //     let col = Vector3::new(
+                //         rand::random::<f32>().fract(),
+                //         rand::random::<f32>().fract(),
+                //         rand::random::<f32>().fract()
+                //         // 0.5, 0.5, 0.5
+                //         // rand, rand, rand
+                        
+                //     );
+                //     let col = col.push(1.0);
+                //     colors.push(col);
+                // } else {
+                //     colors.push(colors[i as usize - 1]);
+                // }
+                colors.push(Vector4::new(uvs[i as usize].x, uvs[i as usize].y, 0.0, 1.0));
             }
 
             let position_buffer: glow::NativeBuffer = gl.create_buffer().expect("Cannot create position buffer");
@@ -111,7 +113,8 @@ impl Mesh {
                 if !self.wireframe {
                     vec![x.x, x.y, x.z, x.w].into_iter()
                 } else {
-                    vec![1.0, 1.0, 1.0, 1.0].into_iter()
+                    // vec![1.0, 1.0, 1.0, 1.0].into_iter()
+                    vec![x.x, x.y, x.z, x.w].into_iter()
                 }
                 
             }).collect::<Vec<f32>>()), glow::STATIC_DRAW);
@@ -153,34 +156,38 @@ pub fn generate_tiled_plane(gl: &Context, width: f32, height: f32, tiles_x: usiz
     let mut uvs: Vec<Vector2<f32>> = Vec::new();
     let mut indices: Vec<u32> = Vec::new();
 
-    for y in 0..tiles_y {
-        for x in 0..tiles_x {
-            // Compute the position offsets for each tile
+    for x in 0..=tiles_x {
+        for y in 0..=tiles_y {
             let offset_x = x as f32 * tile_width - width / 2.0;
             let offset_y = y as f32 * tile_height - height / 2.0;
 
-            // Define the positions for the corners of the current tile
-            let base_idx = (y * tiles_x + x) * 4;
-            positions.push([offset_x, 0.0, offset_y].into());                 // Bottom-left
-            positions.push([offset_x + tile_width, 0.0, offset_y].into());    // Bottom-right
-            positions.push([offset_x + tile_width, 0.0, offset_y + tile_height].into()); // Top-right
-            positions.push([offset_x, 0.0, offset_y + tile_height].into());   // Top-left
+            positions.push(Vector3::new(offset_x, 0.0, offset_y));
+            uvs.push(Vector2::new(x as f32 / tiles_x as f32, y as f32 / tiles_y as f32));
+        }
+    }
 
-            // Define the UV coordinates for the current tile
-            let uv_offset_x = x as f32 / tiles_x as f32;
-            let uv_offset_y = y as f32 / tiles_y as f32;
-            uvs.push([uv_offset_x, uv_offset_y].into());                      // Bottom-left
-            uvs.push([uv_offset_x + 1.0 / tiles_x as f32, uv_offset_y].into()); // Bottom-right
-            uvs.push([uv_offset_x + 1.0 / tiles_x as f32, uv_offset_y + 1.0 / tiles_y as f32].into()); // Top-right
-            uvs.push([uv_offset_x, uv_offset_y + 1.0 / tiles_y as f32].into()); // Top-left
+    
+    for x in 0..=tiles_x {
+        for y in 0..=tiles_y {
+            if x != 0 && y != 0 {
+                let idx = y + x * (tiles_y + 1);
+                let left_idx = y + (x-1) * (tiles_y + 1);
+                let bottom_idx = (y-1) + (x) * (tiles_y + 1);
 
-            // Define the indices for the two triangles forming the tile
-            indices.push(base_idx as u32);
-            indices.push((base_idx + 1) as u32);
-            indices.push((base_idx + 2) as u32);
-            indices.push((base_idx) as u32);
-            indices.push((base_idx + 2) as u32);
-            indices.push((base_idx + 3) as u32);
+                indices.push(idx as u32);
+                indices.push(left_idx as u32);
+                indices.push(bottom_idx as u32);
+            }
+
+            if x != tiles_x && y != tiles_y {
+                let idx = y + x * (tiles_y + 1);
+                let right_idx = y + (x+1) * (tiles_y + 1);
+                let top_idx = (y+1) + (x) * (tiles_y + 1);
+
+                indices.push(idx as u32);
+                indices.push(right_idx as u32);
+                indices.push(top_idx as u32);
+            }
         }
     }
 
@@ -205,39 +212,40 @@ pub fn generate_tiled_plane_colorimg(gl: &Context, width: f32, height: f32, tile
     let mut uvs: Vec<Vector2<f32>> = Vec::new();
     let mut indices: Vec<u32> = Vec::new();
 
-    for y in 0..tiles_y {
-        for x in 0..tiles_x {
-            // Compute the position offsets for each tile
+    for x in 0..=tiles_x {
+        for y in 0..=tiles_y {
             let offset_x = x as f32 * tile_width - width / 2.0;
             let offset_y = y as f32 * tile_height - height / 2.0;
 
-            let height_0  = img.pixels[y * 512 + x].to_array().iter().map(|x| *x as f32).sum::<f32>() * ((3.0 / 255.0) / 4.0);
-            let height_1  = img.pixels[(y + 1) * 512 + x].to_array().iter().map(|x| *x as f32).sum::<f32>() * ((3.0 / 255.0) / 4.0);
-            let height_2  = img.pixels[y * 512 + (x + 1)].to_array().iter().map(|x| *x as f32).sum::<f32>() * ((3.0 / 255.0) / 4.0);
-            let height_3  = img.pixels[(y+1) * 512 + (x+1)].to_array().iter().map(|x| *x as f32).sum::<f32>() * ((3.0 / 255.0) / 4.0);
+            let height  = img.pixels[y * 512 + x].to_array().iter().map(|x| *x as f32).sum::<f32>() * ((3.0 / 255.0) / 4.0);
 
-            // Define the positions for the corners of the current tile
-            let base_idx = (y * tiles_x + x) * 4;
-            positions.push([offset_x, height_0, offset_y].into());                 // Bottom-left
-            positions.push([offset_x + tile_width, height_2, offset_y].into());    // Bottom-right
-            positions.push([offset_x + tile_width, height_1, offset_y + tile_height].into()); // Top-right
-            positions.push([offset_x, height_3, offset_y + tile_height].into());   // Top-left
+            positions.push(Vector3::new(offset_x, height, offset_y));
+            uvs.push(Vector2::new(x as f32 / tiles_x as f32, y as f32 / tiles_y as f32));
+        }
+    }
 
-            // Define the UV coordinates for the current tile
-            let uv_offset_x = x as f32 / tiles_x as f32;
-            let uv_offset_y = y as f32 / tiles_y as f32;
-            uvs.push([uv_offset_x, uv_offset_y].into());                      // Bottom-left
-            uvs.push([uv_offset_x + 1.0 / tiles_x as f32, uv_offset_y].into()); // Bottom-right
-            uvs.push([uv_offset_x + 1.0 / tiles_x as f32, uv_offset_y + 1.0 / tiles_y as f32].into()); // Top-right
-            uvs.push([uv_offset_x, uv_offset_y + 1.0 / tiles_y as f32].into()); // Top-left
+    
+    for x in 0..=tiles_x {
+        for y in 0..=tiles_y {
+            if x != 0 && y != 0 {
+                let idx = y + x * (tiles_y + 1);
+                let left_idx = y + (x-1) * (tiles_y + 1);
+                let bottom_idx = (y-1) + (x) * (tiles_y + 1);
 
-            // Define the indices for the two triangles forming the tile
-            indices.push(base_idx as u32);
-            indices.push((base_idx + 1) as u32);
-            indices.push((base_idx + 2) as u32);
-            indices.push((base_idx) as u32);
-            indices.push((base_idx + 2) as u32);
-            indices.push((base_idx + 3) as u32);
+                indices.push(idx as u32);
+                indices.push(left_idx as u32);
+                indices.push(bottom_idx as u32);
+            }
+
+            if x != tiles_x && y != tiles_y {
+                let idx = y + x * (tiles_y + 1);
+                let right_idx = y + (x+1) * (tiles_y + 1);
+                let top_idx = (y+1) + (x) * (tiles_y + 1);
+
+                indices.push(idx as u32);
+                indices.push(right_idx as u32);
+                indices.push(top_idx as u32);
+            }
         }
     }
 
