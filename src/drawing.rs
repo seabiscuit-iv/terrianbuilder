@@ -4,7 +4,7 @@ use egui::{load::SizedTexture, vec2, Color32, ColorImage, Image, Rect, Response,
 use nalgebra::{Vector2, Vector3, Vector4};
 
 pub struct Drawing {
-    texture: ColorImage
+    pub texture: ColorImage
 }
 
 
@@ -38,6 +38,7 @@ impl Drawing {
     pub fn new() -> Self {
         Self {
             texture: egui::ColorImage::new([512, 512], Color32::BLACK)
+            // texture: colorimage_from_image("ur mom")
         }
     }
 
@@ -166,4 +167,18 @@ fn cubic_weight(t: f32) -> f32{
     } else {
         0.0
     }
+}
+
+
+
+pub fn colorimage_from_image(path: &str) -> ColorImage {
+    let img = image::open(path).unwrap().into_rgba8();
+
+    let (width, height) = img.dimensions();
+
+    let pixels = img.into_raw();
+
+    let color_image = ColorImage::from_rgba_unmultiplied([width as _, height as _], &pixels);
+
+    bicubic_downsize(color_image, 512)
 }

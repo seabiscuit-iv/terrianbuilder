@@ -1,7 +1,7 @@
 
 use std::{default, ops::RangeInclusive, ptr::null, sync::{Arc, Mutex}};
 
-use drawing::{bicubic_downsize, Drawing};
+use drawing::{bicubic_downsize, colorimage_from_image, Drawing};
 use mesh::{generate_tiled_plane, generate_tiled_plane_colorimg, Mesh};
 use tobj;
 
@@ -59,7 +59,11 @@ impl eframe::App for App {
                 ..egui::Frame::default()
             })
             .show(ctx, |ui| {
-
+                if ui.button("Open Texture").clicked() {
+                    if let Some(path) = rfd::FileDialog::new().pick_file() {
+                        self.drawing.texture = colorimage_from_image(path.to_str().unwrap());
+                    }
+                }
             });
 
         let mut img_rect : Rect = Rect::NOTHING;
