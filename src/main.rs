@@ -6,8 +6,8 @@ use mesh::{generate_tiled_plane, Mesh};
 use tobj;
 
 use camera::Camera;
-use eframe::{egui, egui_glow, glow::{self, HasContext, RIGHT}};
-use egui::{load::SizedTexture, style, vec2, Align, Color32, ColorImage, Frame, Image, Layout, Margin, Rect, Style, TextureHandle, TextureOptions, ViewportBuilder};
+use eframe::{egui, egui_glow};
+use egui::{Align, Layout, Margin, Rect};
 use nalgebra::{Vector2, Vector3};
 
 mod shader;
@@ -85,44 +85,48 @@ impl eframe::App for App {
                     })
                 });
                 egui::Frame::none().show(ui, |ui| {
-                    let mut rect = ui.max_rect();
-                    rect.set_height(h);
+                    ui.with_layout(Layout::top_down(Align::Min), |ui| {
+                        let mut rect = ui.max_rect();
+                        rect.set_height(h);
+                        ui.set_max_height(h);
+    
+                        egui::Frame::canvas(&style).show(ui, |ui| {
+                            ui.allocate_new_ui(egui::UiBuilder::new().max_rect(rect), |ui| { 
+                                self.custom_painting(ui);
+                            });
+                        });
+                        
+                
+                        ui.label(format!("Verts: {}", self.mesh.lock().unwrap().positions.len()));
+                        ui.add_space(0.0);
+                        ui.label(format!("Tris: {}", self.mesh.lock().unwrap().indicies.len()/3));
+                        ui.add_space(12.0);
+                        ui.collapsing("Viewport", |ui| {
+                            if ui.toggle_value(&mut self.mesh.lock().unwrap().wireframe, "Wireframe").clicked() {    
+                                self.mesh.lock().unwrap().load_buffers(&_frame.gl().unwrap());
+                            }
+                        });
+                        ui.add_space(12.0);
 
-                    egui::Frame::canvas(&style).show(ui, |ui| {
-                        ui.allocate_new_ui(egui::UiBuilder::new().max_rect(rect), |ui| { 
-                            self.custom_painting(ui);
+                        ui.collapsing("Camera Controls", |ui| {
+                            ui.label("Position");
+                            ui.horizontal(|ui| {
+                                ui.add(egui::DragValue::new(&mut self.camera.lock().unwrap().pos.x));
+                                ui.add(egui::DragValue::new(&mut self.camera.lock().unwrap().pos.y));
+                                ui.add(egui::DragValue::new(&mut self.camera.lock().unwrap().pos.z));
+                            });
+                            ui.label("Rotation");
+                            ui.horizontal(|ui| {
+                                ui.add(egui::DragValue::new(&mut self.angle.0));
+                                ui.add(egui::DragValue::new(&mut self.angle.1));
+                                ui.add(egui::DragValue::new(&mut self.angle.2));
+                            });
+                            ui.label("Speed");
+                            ui.horizontal(|ui| {
+                                ui.add(egui::Slider::new(&mut self.speed, RangeInclusive::new(0.0, 20.0)));
+                            });
                         });
                     });
-                    
-            
-                    ui.label(format!("Verts: {}", self.mesh.lock().unwrap().positions.len()));
-                    ui.label(format!("Tris: {}", self.mesh.lock().unwrap().indicies.len()/3));
-                    // ui.add_space(12.0);
-                    // ui.collapsing("Viewport", |ui| {
-                    //     if ui.toggle_value(&mut self.mesh.lock().unwrap().wireframe, "Wireframe").clicked() {    
-                    //         self.mesh.lock().unwrap().load_buffers(&_frame.gl().unwrap());
-                    //     }
-                    // });
-                    // ui.add_space(12.0);
-
-                    // ui.collapsing("Camera Controls", |ui| {
-                    //     ui.label("Position");
-                    //     ui.horizontal(|ui| {
-                    //         ui.add(egui::DragValue::new(&mut self.camera.lock().unwrap().pos.x));
-                    //         ui.add(egui::DragValue::new(&mut self.camera.lock().unwrap().pos.y));
-                    //         ui.add(egui::DragValue::new(&mut self.camera.lock().unwrap().pos.z));
-                    //     });
-                    //     ui.label("Rotation");
-                    //     ui.horizontal(|ui| {
-                    //         ui.add(egui::DragValue::new(&mut self.angle.0));
-                    //         ui.add(egui::DragValue::new(&mut self.angle.1));
-                    //         ui.add(egui::DragValue::new(&mut self.angle.2));
-                    //     });
-                    //     ui.label("Speed");
-                    //     ui.horizontal(|ui| {
-                    //         ui.add(egui::Slider::new(&mut self.speed, RangeInclusive::new(0.0, 20.0)));
-                    //     });
-                    // });
                 });
             });
 
