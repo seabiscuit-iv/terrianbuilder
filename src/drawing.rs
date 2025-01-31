@@ -19,6 +19,10 @@ impl Drawing {
         ui.add(img)
     }
 
+    pub fn get_image(&self) -> ColorImage {
+        return self.texture.clone();
+    }
+
 
     pub fn draw_update(&mut self, ctx: &egui::Context, img_rect: Rect) {
         if ctx.input(|i| i.pointer.button_down(egui::PointerButton::Primary) && (i.pointer.delta().length() > 0.1 || i.pointer.press_start_time() == Some(0.0)) && img_rect.contains(i.pointer.interact_pos().unwrap())) {

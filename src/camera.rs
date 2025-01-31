@@ -35,8 +35,8 @@ impl Camera{
     }
 
     pub fn get_proj_view_mat(&self) -> Matrix4<f32> {
-        let persp = Perspective3::new(self.aspect_ratio, self.fov, 1.0, 100.0).to_homogeneous();
-        let _ortho = Orthographic3::from_fov(self.aspect_ratio, self.fov, 1.0, 100.0).to_homogeneous();
+        let persp = Perspective3::new(self.aspect_ratio, self.fov, 0.1, 100.0).to_homogeneous();
+        let _ortho = Orthographic3::from_fov(self.aspect_ratio, self.fov, 0.1, 100.0).to_homogeneous();
 
         let up = self.get_up_vec();
 

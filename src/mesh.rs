@@ -1,4 +1,5 @@
 use eframe::glow::{self, Context, HasContext as _};
+use egui::ColorImage;
 use nalgebra::{Vector2, Vector3, Vector4};
 
 
@@ -33,11 +34,15 @@ impl Mesh {
             for (i, pos) in positions.iter().enumerate() {
                 let i = i as f32;
 
+                let rand = rand::random::<f32>().fract();
+
                 if i as i32 % 3 == 0 {
                     let col = Vector3::new(
                         rand::random::<f32>().fract(),
                         rand::random::<f32>().fract(),
                         rand::random::<f32>().fract()
+                        // 0.5, 0.5, 0.5
+                        // rand, rand, rand
                     );
                     let col = col.push(1.0);
                     colors.push(col);
@@ -187,3 +192,62 @@ pub fn generate_tiled_plane(gl: &Context, width: f32, height: f32, tiles_x: usiz
         false
     )
 }
+
+
+
+
+
+pub fn generate_tiled_plane_colorimg(gl: &Context, width: f32, height: f32, tiles_x: usize, tiles_y: usize, img: ColorImage) -> Mesh {
+    let tile_width = width / tiles_x as f32;
+    let tile_height = height / tiles_y as f32;
+
+    let mut positions: Vec<Vector3<f32>> = Vec::new();
+    let mut uvs: Vec<Vector2<f32>> = Vec::new();
+    let mut indices: Vec<u32> = Vec::new();
+
+    for y in 0..tiles_y {
+        for x in 0..tiles_x {
+            // Compute the position offsets for each tile
+            let offset_x = x as f32 * tile_width - width / 2.0;
+            let offset_y = y as f32 * tile_height - height / 2.0;
+
+            let height_0  = img.pixels[y * 512 + x].to_array().iter().map(|x| *x as f32).sum::<f32>() * ((3.0 / 255.0) / 4.0);
+            let height_1  = img.pixels[(y + 1) * 512 + x].to_array().iter().map(|x| *x as f32).sum::<f32>() * ((3.0 / 255.0) / 4.0);
+            let height_2  = img.pixels[y * 512 + (x + 1)].to_array().iter().map(|x| *x as f32).sum::<f32>() * ((3.0 / 255.0) / 4.0);
+            let height_3  = img.pixels[(y+1) * 512 + (x+1)].to_array().iter().map(|x| *x as f32).sum::<f32>() * ((3.0 / 255.0) / 4.0);
+
+            // Define the positions for the corners of the current tile
+            let base_idx = (y * tiles_x + x) * 4;
+            positions.push([offset_x, height_0, offset_y].into());                 // Bottom-left
+            positions.push([offset_x + tile_width, height_2, offset_y].into());    // Bottom-right
+            positions.push([offset_x + tile_width, height_1, offset_y + tile_height].into()); // Top-right
+            positions.push([offset_x, height_3, offset_y + tile_height].into());   // Top-left
+
+            // Define the UV coordinates for the current tile
+            let uv_offset_x = x as f32 / tiles_x as f32;
+            let uv_offset_y = y as f32 / tiles_y as f32;
+            uvs.push([uv_offset_x, uv_offset_y].into());                      // Bottom-left
+            uvs.push([uv_offset_x + 1.0 / tiles_x as f32, uv_offset_y].into()); // Bottom-right
+            uvs.push([uv_offset_x + 1.0 / tiles_x as f32, uv_offset_y + 1.0 / tiles_y as f32].into()); // Top-right
+            uvs.push([uv_offset_x, uv_offset_y + 1.0 / tiles_y as f32].into()); // Top-left
+
+            // Define the indices for the two triangles forming the tile
+            indices.push(base_idx as u32);
+            indices.push((base_idx + 1) as u32);
+            indices.push((base_idx + 2) as u32);
+            indices.push((base_idx) as u32);
+            indices.push((base_idx + 2) as u32);
+            indices.push((base_idx + 3) as u32);
+        }
+    }
+
+    // Create the mesh
+    Mesh::new(&gl,
+        positions,
+        indices,
+        uvs,
+        false
+    )
+}
+
+

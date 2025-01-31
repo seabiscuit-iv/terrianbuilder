@@ -2,7 +2,7 @@
 use std::{default, ops::RangeInclusive, ptr::null, sync::{Arc, Mutex}};
 
 use drawing::Drawing;
-use mesh::{generate_tiled_plane, Mesh};
+use mesh::{generate_tiled_plane, generate_tiled_plane_colorimg, Mesh};
 use tobj;
 
 use camera::Camera;
@@ -100,6 +100,10 @@ impl eframe::App for App {
                         ui.label(format!("Verts: {}", self.mesh.lock().unwrap().positions.len()));
                         ui.add_space(0.0);
                         ui.label(format!("Tris: {}", self.mesh.lock().unwrap().indicies.len()/3));
+                        ui.add_space(12.0);
+                        if ui.button("Compile").clicked() {
+                            self.mesh = Arc::new(Mutex::new(generate_tiled_plane_colorimg(_frame.gl().unwrap(), 20.0, 20.0, 511, 511, self.drawing.get_image())))
+                        };
                         ui.add_space(12.0);
                         ui.collapsing("Viewport", |ui| {
                             if ui.toggle_value(&mut self.mesh.lock().unwrap().wireframe, "Wireframe").clicked() {    
@@ -208,7 +212,7 @@ impl App {
             .as_ref()
             .expect("You need to run eframe with the glow backend");
 
-        let mesh = generate_tiled_plane(gl, 20.0, 20.0, 200, 200);
+        let mesh = generate_tiled_plane(gl, 20.0, 20.0, 511, 511);
 
         let shader_program = ShaderProgram::new(gl, "src/main.vert.glsl", "src/main.frag.glsl");
         
