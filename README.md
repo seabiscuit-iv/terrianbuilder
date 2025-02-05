@@ -2,10 +2,10 @@
 
 A terrain heightmap and texture painting and generation tool. 
 
-![img/example_1.png]
-![img/example_2.png]
-![img/example_3.png]
-![img/example_4.png]
+![/img/example_1.png]
+![/img/example_2.png]
+![/img/example_3.png]
+![/img/example_4.png]
 
 ## Feature Wishlist
 - [x] Image loading and replacement
