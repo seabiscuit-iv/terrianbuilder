@@ -212,14 +212,29 @@ pub fn colorimage_from_image(path: &str) -> ColorImage {
 pub fn colorimage_to_bw(img: &ColorImage) -> ColorImage {
     let dim = img.size;
 
+    println!("Calling BW");
+
+
+
     let pixels: Vec<u8> = img.as_raw()
-        .chunks_exact(3)
+        .chunks_exact(4)
         .map(|x| {
             let sum = ((x[0] as u32 + x[1] as u32 + x[2] as u32) / 3) as u8;
-            [sum, sum, sum] // Expand to RGB grayscale
+            [sum, sum, sum, 255] // Expand to RGB grayscale
         })
         .flatten()
         .collect();
 
-    ColorImage::from_rgb(dim, &pixels)
+
+    println!("{}, {}", pixels.len(), img.as_raw().len());
+    assert!(pixels.len() == img.as_raw().len());
+
+    println!("Return BW");
+
+
+    let x = ColorImage::from_rgba_unmultiplied(dim, &pixels);
+
+    println!("Return BW 2");
+
+    x
 }

@@ -41,6 +41,12 @@ enum SelectedTab {
     Color
 }
 
+
+#[derive(PartialEq, Eq)]
+enum MeshColoring {
+    Color,
+    Height
+}
 // Main App UI
 
 struct App {
@@ -54,7 +60,8 @@ struct App {
     angle: (f32, f32, f32),
     speed: f32,
     plane_density: u32,
-    color: Color32
+    color: Color32,
+    mesh_coloring: MeshColoring
 }
 
 impl eframe::App for App {
@@ -72,6 +79,7 @@ impl eframe::App for App {
                         match self.tab {
                             SelectedTab::Height => {
                                 self.drawing.texture = colorimage_to_bw(&colorimage_from_image(path.to_str().unwrap()));
+                                println!("We got here");
                             },
                             SelectedTab::Color => {
                                 self.colors.texture = colorimage_from_image(path.to_str().unwrap());
@@ -148,7 +156,13 @@ impl eframe::App for App {
                         if ui.button("Compile").clicked() {
                             let wireframe = self.mesh.lock().unwrap().wireframe;
                             // self.mesh.lock().unwrap().destroy(_frame.gl().unwrap());
-                            let mut mesh = generate_tiled_plane_colorimg(_frame.gl().unwrap(), 20.0, 20.0, self.plane_density as usize, self.plane_density as usize, &bicubic_downsize( self.drawing.get_image(), self.plane_density as usize + 1 ), Some(&bicubic_downsize(self.colors.get_image(), self.plane_density as usize + 1)));
+                            let temp = bicubic_downsize(self.colors.get_image(), self.plane_density as usize + 1);
+                            let mut mesh = generate_tiled_plane_colorimg(_frame.gl().unwrap(), 20.0, 20.0, self.plane_density as usize, self.plane_density as usize, &bicubic_downsize( self.drawing.get_image(), self.plane_density as usize + 1 ), 
+                                match self.mesh_coloring {
+                                    MeshColoring::Color => Some(&temp),
+                                    MeshColoring::Height => None,
+                                }
+                            );
                             // let mut mesh = generate_tiled_plane_colorimg(_frame.gl().unwrap(), 20.0, 20.0, self.plane_density as usize, self.plane_density as usize, bicubic_downsize( self.drawing.get_image(), self.plane_density as usize + 1 ));
                             mesh.wireframe = wireframe;
                             self.mesh = Arc::new(Mutex::new(mesh));
@@ -168,6 +182,13 @@ impl eframe::App for App {
                             if ui.toggle_value(&mut self.mesh.lock().unwrap().wireframe, "Wireframe").clicked() {    
                                 self.mesh.lock().unwrap().load_buffers(&_frame.gl().unwrap());
                             }
+                            ui.add_space(5.0);
+                            ui.horizontal(|ui| {
+                                ui.add_space(5.0);
+                                ui.radio_value(&mut self.mesh_coloring, MeshColoring::Color, "Color");
+                                ui.add_space(5.0);
+                                ui.radio_value(&mut self.mesh_coloring, MeshColoring::Height, "Height");
+                            })
                         });
                         ui.add_space(4.0);
                         ui.collapsing("Camera Controls", |ui| {
@@ -293,7 +314,8 @@ impl App {
             angle: (-20.0, 0.0, 0.0),
             speed: 10.0,
             plane_density: 100,
-            color: Color32::GREEN
+            color: Color32::GREEN,
+            mesh_coloring: MeshColoring::Height
         }
     }
 
@@ -311,8 +333,6 @@ impl App {
 
         self.angle.0 += response.drag_motion().y * -0.1;
         self.angle.1 += response.drag_motion().x * -0.1;
-
-        let value = self.value;
 
         let callback = egui::PaintCallback {
             rect,
