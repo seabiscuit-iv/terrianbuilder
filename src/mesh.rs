@@ -1,6 +1,8 @@
 use eframe::glow::{self, Context, HasContext as _};
-use egui::{ColorImage, Vec2};
+use egui::{Color32, ColorImage, Vec2};
 use nalgebra::{Vector2, Vector3, Vector4};
+
+use crate::drawing;
 
 
 
@@ -9,7 +11,7 @@ pub struct Mesh {
     pub positions: Vec<Vector3<f32>>,
     pub indicies : Vec<u32>,
     uvs: Vec<Vector2<f32>>,
-    colors: Vec<Vector4<f32>>,
+    pub colors: Vec<Vector4<f32>>,
     pub vertex_array: glow::VertexArray,
     pub position_buffer: glow::Buffer,
     pub color_buffer: glow::Buffer,
@@ -21,38 +23,17 @@ pub struct Mesh {
 
 
 impl Mesh {
-    pub fn new(gl: &glow::Context, positions: Vec<Vector3<f32>>, indicies: Vec<u32>, uvs: Vec<Vector2<f32>>, wireframe: bool) -> Self {
+    pub fn new(gl: &glow::Context, positions: Vec<Vector3<f32>>, indicies: Vec<u32>, uvs: Vec<Vector2<f32>>, colors: Vec<Color32>, wireframe: bool) -> Self {
         use glow::HasContext as _;
 
         unsafe {
             let vert_count = positions.len();
 
-            let mut uvs = uvs.clone();
+            let uvs = uvs.clone();
             
-            let mut colors: Vec<Vector4<f32>> = Vec::new();
-
-            for (i, pos) in positions.iter().enumerate() {
-                let i = i as f32;
-
-                let rand = rand::random::<f32>().fract();
-
-                // if i as i32 % 3 == 0 {
-                //     let col = Vector3::new(
-                //         rand::random::<f32>().fract(),
-                //         rand::random::<f32>().fract(),
-                //         rand::random::<f32>().fract()
-                //         // 0.5, 0.5, 0.5
-                //         // rand, rand, rand
-                        
-                //     );
-                //     let col = col.push(1.0);
-                //     colors.push(col);
-                // } else {
-                //     colors.push(colors[i as usize - 1]);
-                // }
-                // colors.push(Vector4::new(uvs[i as usize].x, uvs[i as usize].y, 0.0, 1.0));
-                colors.push(Vector4::new(pos.y / 6.0 + 0.25, pos.y / 6.0 + 0.25, pos.y / 6.0 + 0.25, 1.0));
-            }
+            let colors: Vec<Vector4<f32>> = colors.iter().map(|x| {
+                Vector4::new(x.r() as f32 / 255.0, x.g() as f32 / 255.0, x.b() as f32 / 255.0, 1.0)
+            }).collect();
 
             let position_buffer: glow::NativeBuffer = gl.create_buffer().expect("Cannot create position buffer");
             let color_buffer = gl.create_buffer().expect("Cannot create color buffer");
@@ -147,79 +128,37 @@ impl Mesh {
 }
 
 
+// let height  = img.pixels[y * (tiles_x+1) + x].to_array().iter().map(|x| *x as f32).sum::<f32>() * ((3.0 / 255.0) / 4.0);
 
 
-pub fn generate_tiled_plane(gl: &Context, width: f32, height: f32, tiles_x: usize, tiles_y: usize) -> Mesh {
+pub fn generate_tiled_plane_colorimg(gl: &Context, width: f32, height: f32, tiles_x: usize, tiles_y: usize, img: &ColorImage, cols: Option<&ColorImage>) -> Mesh {
     let tile_width = width / tiles_x as f32;
     let tile_height = height / tiles_y as f32;
 
     let mut positions: Vec<Vector3<f32>> = Vec::new();
     let mut uvs: Vec<Vector2<f32>> = Vec::new();
     let mut indices: Vec<u32> = Vec::new();
+    let mut colors: Vec<Color32> = Vec::new();
+
+    // println!("{} tiles x", tiles_x);
+    // println!("{} img width", img.width());
+    // if cols.is_some() {
+    //     println!("{} col width", cols.unwrap().width());
+    // }
 
     for x in 0..=tiles_x {
         for y in 0..=tiles_y {
             let offset_x = x as f32 * tile_width - width / 2.0;
             let offset_y = y as f32 * tile_height - height / 2.0;
 
-            positions.push(Vector3::new(offset_x, 0.0, offset_y));
-            uvs.push(Vector2::new(x as f32 / tiles_x as f32, y as f32 / tiles_y as f32));
-        }
-    }
-
-    
-    for x in 0..=tiles_x {
-        for y in 0..=tiles_y {
-            if x != 0 && y != 0 {
-                let idx = y + x * (tiles_y + 1);
-                let left_idx = y + (x-1) * (tiles_y + 1);
-                let bottom_idx = (y-1) + (x) * (tiles_y + 1);
-
-                indices.push(idx as u32);
-                indices.push(left_idx as u32);
-                indices.push(bottom_idx as u32);
+            // let height  = img.pixels[y * (tiles_x+1) + x].to_array().iter().map(|x| *x as f32).sum::<f32>() * (1.0 / (3.0 * 255.0)) * 4.0;
+            // println!("{}", 0.6 * (height / 4.0) + 0.2);
+            let height = img.pixels[y * (tiles_x+1) + x].to_array().iter().map(|x| *x as f32).sum::<f32>() * (1.0 / (3.0 * 255.0)) * 4.0;
+            if let Some(col) = cols {
+                colors.push(col.pixels[y * (tiles_x+1) + x]);
+            } else {
+                colors.push(drawing::vec4_to_col(Vector4::new(0.6 * (height / 4.0) + 0.1, 0.6 * (height / 4.0) + 0.1, 0.6 * (height / 4.0) + 0.1, 1.0)));
             }
-
-            if x != tiles_x && y != tiles_y {
-                let idx = y + x * (tiles_y + 1);
-                let right_idx = y + (x+1) * (tiles_y + 1);
-                let top_idx = (y+1) + (x) * (tiles_y + 1);
-
-                indices.push(idx as u32);
-                indices.push(right_idx as u32);
-                indices.push(top_idx as u32);
-            }
-        }
-    }
-
-    // Create the mesh
-    Mesh::new(&gl,
-        positions,
-        indices,
-        uvs,
-        false
-    )
-}
-
-
-
-            // let height  = img.pixels[y * (tiles_x+1) + x].to_array().iter().map(|x| *x as f32).sum::<f32>() * ((3.0 / 255.0) / 4.0);
-
-
-pub fn generate_tiled_plane_colorimg(gl: &Context, width: f32, height: f32, tiles_x: usize, tiles_y: usize, img: ColorImage) -> Mesh {
-    let tile_width = width / tiles_x as f32;
-    let tile_height = height / tiles_y as f32;
-
-    let mut positions: Vec<Vector3<f32>> = Vec::new();
-    let mut uvs: Vec<Vector2<f32>> = Vec::new();
-    let mut indices: Vec<u32> = Vec::new();
-
-    for x in 0..=tiles_x {
-        for y in 0..=tiles_y {
-            let offset_x = x as f32 * tile_width - width / 2.0;
-            let offset_y = y as f32 * tile_height - height / 2.0;
-
-            let height  = img.pixels[y * (tiles_x+1) + x].to_array().iter().map(|x| *x as f32).sum::<f32>() * ((3.0 / 255.0) / 4.0);
 
             positions.push(Vector3::new(offset_x, height, offset_y));
             uvs.push(Vector2::new(x as f32 / tiles_x as f32, y as f32 / tiles_y as f32));
@@ -256,6 +195,7 @@ pub fn generate_tiled_plane_colorimg(gl: &Context, width: f32, height: f32, tile
         positions,
         indices,
         uvs,
+        colors,
         false
     )
 }

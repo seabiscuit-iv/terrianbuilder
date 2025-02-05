@@ -1,13 +1,13 @@
 
 use std::{default, ops::RangeInclusive, ptr::null, sync::{Arc, Mutex}};
 
-use drawing::{bicubic_downsize, colorimage_from_image, Drawing};
-use mesh::{generate_tiled_plane, generate_tiled_plane_colorimg, Mesh};
+use drawing::{bicubic_downsize, colorimage_from_image, colorimage_to_bw, Drawing};
+use mesh::{generate_tiled_plane_colorimg, Mesh};
 use tobj;
 
 use camera::Camera;
 use eframe::{egui, egui_glow};
-use egui::{Align, Layout, Margin, Rect};
+use egui::{vec2, Align, Color32, Layout, Margin, Rect};
 use nalgebra::{Vector2, Vector3};
 
 mod shader;
@@ -35,18 +35,26 @@ fn main() -> eframe::Result{
     )
 }
 
+#[derive(PartialEq, Eq)]
+enum SelectedTab {
+    Height,
+    Color
+}
 
 // Main App UI
 
 struct App {
     drawing: Drawing,
+    colors: Drawing,
+    tab: SelectedTab,
     mesh: Arc<Mutex<Mesh>>,
     camera: Arc<Mutex<Camera>>,
     shader_program: Arc<Mutex<ShaderProgram>>,
     value: f32,
     angle: (f32, f32, f32),
     speed: f32,
-    plane_density: u32
+    plane_density: u32,
+    color: Color32
 }
 
 impl eframe::App for App {
@@ -61,7 +69,14 @@ impl eframe::App for App {
             .show(ctx, |ui| {
                 if ui.button("Open Texture").clicked() {
                     if let Some(path) = rfd::FileDialog::new().pick_file() {
-                        self.drawing.texture = colorimage_from_image(path.to_str().unwrap());
+                        match self.tab {
+                            SelectedTab::Height => {
+                                self.drawing.texture = colorimage_to_bw(&colorimage_from_image(path.to_str().unwrap()));
+                            },
+                            SelectedTab::Color => {
+                                self.colors.texture = colorimage_from_image(path.to_str().unwrap());
+                            },
+                        }
                     }
                 }
             });
@@ -78,15 +93,35 @@ impl eframe::App for App {
                 let style = ui.style().clone();
                 
                 egui::Frame::none().show(ui, |ui| {
-                    ui.set_max_width(w);
-                    
-                    let mut rect = ui.max_rect();
-                    rect.set_height(rect.height()/2.0);
+                    ui.with_layout(Layout::top_down(Align::Min), |ui| {
+                        ui.set_max_width(w);
+                        
+                        let mut rect = ui.max_rect();
+                        rect.set_height(rect.height()/2.0);
 
-                    egui::Frame::canvas(&style).show(ui, |ui| {
-                        h = ui.allocate_new_ui(egui::UiBuilder::new().max_rect(rect), |ui| {
-                            img_rect = self.drawing.draw(ui, ctx).rect;
-                        }).response.rect.height();
+                        egui::Frame::canvas(&style).show(ui, |ui| {
+                            h = ui.allocate_new_ui(egui::UiBuilder::new().max_rect(rect), |ui| {
+                                match self.tab {
+                                    SelectedTab::Height => img_rect = self.drawing.draw(ui, ctx).rect,
+                                    SelectedTab::Color => img_rect = self.colors.draw(ui, ctx).rect,
+                                }
+                            }).response.rect.height();
+                        });
+
+                        ui.add_space(4.0);
+                        ui.horizontal(|ui| {
+                            ui.add_space(5.0);
+                            ui.radio_value(&mut self.tab, SelectedTab::Height, "Height");
+                            ui.add_space(5.0);
+                            ui.radio_value(&mut self.tab, SelectedTab::Color, "Color");
+                        });
+                        ui.add_space(4.0);
+                        if let SelectedTab::Color = self.tab {
+                            let t = self.color.to_array();
+                            let mut temp = [(t[0] as f32) / 255.0,  (t[1] as f32) / 255.0, (t[2] as f32) / 255.0];
+                            ui.color_edit_button_rgb(&mut temp);
+                            self.color = Color32::from_rgb((255.0 * temp[0]) as u8, (255.0 * temp[1]) as u8, (255.0 * temp[2]) as u8);
+                        }
                     })
                 });
                 egui::Frame::none().show(ui, |ui| {
@@ -101,27 +136,34 @@ impl eframe::App for App {
                             });
                         });
                         
-                
-                        ui.label(format!("Verts: {}", self.mesh.lock().unwrap().positions.len()));
-                        ui.add_space(0.0);
-                        ui.label(format!("Tris: {}", self.mesh.lock().unwrap().indicies.len()/3));
+
+                        ui.horizontal(|ui| {                
+                            ui.label(format!("Verts: {}", self.mesh.lock().unwrap().positions.len()));
+                            ui.add_space(2.0);
+                            ui.label(format!("Tris: {}", self.mesh.lock().unwrap().indicies.len()/3));
+                        });
 
                         ui.add_space(4.0);
-
-                        ui.label("Plane Density");
-                        ui.add(egui::Slider::new(&mut self.plane_density, RangeInclusive::new(5, 511)));
                         
-                        ui.add_space(12.0);
                         if ui.button("Compile").clicked() {
                             let wireframe = self.mesh.lock().unwrap().wireframe;
                             // self.mesh.lock().unwrap().destroy(_frame.gl().unwrap());
-                            let mut mesh = generate_tiled_plane_colorimg(_frame.gl().unwrap(), 20.0, 20.0, self.plane_density as usize, self.plane_density as usize, bicubic_downsize( self.drawing.get_image(), self.plane_density as usize + 1 ));
+                            let mut mesh = generate_tiled_plane_colorimg(_frame.gl().unwrap(), 20.0, 20.0, self.plane_density as usize, self.plane_density as usize, &bicubic_downsize( self.drawing.get_image(), self.plane_density as usize + 1 ), Some(&bicubic_downsize(self.colors.get_image(), self.plane_density as usize + 1)));
                             // let mut mesh = generate_tiled_plane_colorimg(_frame.gl().unwrap(), 20.0, 20.0, self.plane_density as usize, self.plane_density as usize, bicubic_downsize( self.drawing.get_image(), self.plane_density as usize + 1 ));
                             mesh.wireframe = wireframe;
                             self.mesh = Arc::new(Mutex::new(mesh));
                             self.mesh.lock().unwrap().load_buffers(_frame.gl().unwrap());
                         };
-                        ui.add_space(12.0);
+
+                        ui.add_space(4.0);
+
+                        ui.horizontal(|ui| {
+                            ui.label("Plane Density");
+                            ui.add_space(1.0);                        
+                            ui.add(egui::Slider::new(&mut self.plane_density, RangeInclusive::new(5, 511)));
+                        });
+
+                        ui.add_space(4.0);
                         ui.collapsing("Viewport", |ui| {
                             if ui.toggle_value(&mut self.mesh.lock().unwrap().wireframe, "Wireframe").clicked() {    
                                 self.mesh.lock().unwrap().load_buffers(&_frame.gl().unwrap());
@@ -208,7 +250,11 @@ impl eframe::App for App {
 
 
         //DRAWING LOGIC
-        self.drawing.draw_update(ctx, img_rect);
+        match self.tab {
+            SelectedTab::Height => self.drawing.draw_update(ctx, img_rect),
+            SelectedTab::Color => self.colors.draw_update_color(ctx, img_rect, self.color),
+        }
+        
 
 
         let look = rot * Vector3::new(0.0, 0.0, -1.0);
@@ -228,21 +274,26 @@ impl App {
             .as_ref()
             .expect("You need to run eframe with the glow backend");
 
-        let mesh = generate_tiled_plane(gl, 20.0, 20.0, 100, 100);
+        let drawing = Drawing::new();
+
+        let mesh = generate_tiled_plane_colorimg(gl, 20.0, 20.0, 100, 100, &drawing.texture, None);
 
         let shader_program = ShaderProgram::new(gl, "src/main.vert.glsl", "src/main.frag.glsl");
         
         let camera = Camera::default();
         
         Self { 
-            drawing: Drawing::new(),
+            drawing,
+            colors: Drawing::new(),
+            tab: SelectedTab::Height,
             mesh: Arc::new(Mutex::new(mesh)), 
             shader_program: Arc::new(Mutex::new(shader_program)),
             camera: Arc::new(Mutex::new(camera)),
             value: 0.0,
             angle: (-20.0, 0.0, 0.0),
             speed: 10.0,
-            plane_density: 100
+            plane_density: 100,
+            color: Color32::GREEN
         }
     }
 

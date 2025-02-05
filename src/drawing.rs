@@ -1,7 +1,7 @@
 use core::{panic, prelude::v1};
 
-use egui::{load::SizedTexture, vec2, Color32, ColorImage, Image, Rect, Response, Ui};
-use nalgebra::{Vector2, Vector3, Vector4};
+use egui::{load::SizedTexture, pos2, vec2, Color32, ColorImage, Image, Rect, Response, Ui};
+use nalgebra::{Vector2, Vector3, Vector4, U32};
 
 pub struct Drawing {
     pub texture: ColorImage
@@ -34,6 +34,16 @@ impl Drawing {
         }
     }
 
+    pub fn draw_update_color(&mut self, ctx: &egui::Context, img_rect: Rect, color: Color32) {
+        if ctx.input(|i| i.pointer.button_down(egui::PointerButton::Primary) && (i.pointer.delta().length() > 0.1 || i.pointer.press_start_time() == Some(0.0)) && img_rect.contains(i.pointer.interact_pos().unwrap())) {
+            let mouse_pos = (ctx.pointer_interact_pos().unwrap() - img_rect.left_top()) / vec2(img_rect.width(), img_rect.height());
+            // println!("{}", mouse_pos);
+            let pixel_pos = Vector2::<usize>::new((mouse_pos.x * 512.0) as usize, (mouse_pos.y * 512.0) as usize);
+
+            self.add_radius_color(pixel_pos, 12, color);
+        }
+    }
+
 
     pub fn new() -> Self {
         Self {
@@ -57,6 +67,10 @@ impl Drawing {
     } 
 
     fn add_radius(&mut self, pos: Vector2<usize>, radius: usize) {
+        self.add_radius_color(pos, radius, Color32::from_rgb(26, 26, 26));
+    }
+
+    fn add_radius_color(&mut self, pos: Vector2<usize>, radius: usize, color: Color32) {
         let min_x = ((pos.x as i32) - (radius as i32)).max(0) as usize;
         let min_y = ((pos.y as i32) - (radius as i32)).max(0) as usize;
         let max_x = ((pos.x as i32) + (radius as i32)).min(511) as usize;
@@ -72,13 +86,17 @@ impl Drawing {
                 }
                 let mut v = col_to_vec4(self.texture.pixels[y * 512 + x]);
 
-                v.x += 0.1;
+                let (dx, dy, dz) = (color.r() as f32 / 255.0, color.g() as f32 / 255.0, color.b() as f32 / 255.0);
+
+                // println!("{}, {}, {}", dx, dy, dz);
+
+                v.x += dx;
                 v.x = v.x.clamp(0.0, 1.0);
                 
-                v.y += 0.1;
+                v.y += dy;
                 v.y = v.y.clamp(0.0, 1.0);
                 
-                v.z += 0.1;
+                v.z += dz;
                 v.z = v.z.clamp(0.0, 1.0);
 
                 self.texture.pixels[y * 512 + x] = vec4_to_col(v);
@@ -88,13 +106,13 @@ impl Drawing {
 }
 
 
-fn col_to_vec4(col: Color32) -> Vector4<f32> {
+pub fn col_to_vec4(col: Color32) -> Vector4<f32> {
     let col : Vector4<u8> = [col.r(), col.g(), col.b(), col.a()].into();
     let col :  Vector4<f32> = col.map(|x| (x as f32) / 255.0);
     col
 }
 
-fn vec4_to_col(vec: Vector4<f32>) -> Color32 {
+pub fn vec4_to_col(vec: Vector4<f32>) -> Color32 {
     vec.iter().for_each(|f| {
         if *f > 1.0 || *f < 0.0 {
             panic!("Illegal Color Supplied");
@@ -111,9 +129,9 @@ pub fn bicubic_downsize(img: ColorImage, target_size: usize) -> ColorImage{
     if img.size[0] != img.size[1] {
         panic!("Supplied image is not square");
     }
-    if img.size[0] < target_size {
-        panic!("Attempting to upscale image, illegal");
-    }
+    // if img.size[0] < target_size {
+    //     panic!("Attempting to upscale image, illegal");
+    // }
 
     let og_size = img.size[0];
     let scale = (og_size as f32) / (target_size as f32);
@@ -180,5 +198,28 @@ pub fn colorimage_from_image(path: &str) -> ColorImage {
 
     let color_image = ColorImage::from_rgba_unmultiplied([width as _, height as _], &pixels);
 
-    bicubic_downsize(color_image, 512)
+    let width = width.min(height);
+
+    let img = color_image.region(&Rect {
+        min: egui::Pos2 { x: 0.0, y: 0.0 },
+        max: egui::Pos2 { x: width as f32, y: width as f32 },
+    }, None);
+
+    bicubic_downsize(img, 512)
+}
+
+
+pub fn colorimage_to_bw(img: &ColorImage) -> ColorImage {
+    let dim = img.size;
+
+    let pixels: Vec<u8> = img.as_raw()
+        .chunks_exact(3)
+        .map(|x| {
+            let sum = ((x[0] as u32 + x[1] as u32 + x[2] as u32) / 3) as u8;
+            [sum, sum, sum] // Expand to RGB grayscale
+        })
+        .flatten()
+        .collect();
+
+    ColorImage::from_rgb(dim, &pixels)
 }
